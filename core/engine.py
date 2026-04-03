@@ -2,56 +2,54 @@
 from typing import List, Dict
 
 class SymmetryEngine:
-    def __init__(self, sensitivity: float = 0.01):
-        self.sensitivity = sensitivity # Margem de erro aceitável para considerar "simetria"
+    def __init__(self, sensitivity: float = 0.0001):
+        self.sensitivity = sensitivity 
 
-    def analyze_market_state(self, candles: List[Dict]) -> dict:
+    def get_market_state(self, current_candle: Dict, history: List[Dict]) -> str:
         """
-        Recebe o histórico de velas e retorna o estado das simetrias e movimentos.
+        Compila todas as análises para entregar à IA.
         """
-        if len(candles) < 5:
-            return {"status": "Aguardando mais dados históricos..."}
+        if len(history) < 5:
+            return "AGUARDANDO_DADOS"
 
-        latest_candle = candles[-1]
-        previous_candles = candles[:-1]
+        # Verifica P4 e P5 (Baseado no seu PDF)
+        p4 = self._identify_p4_take_profit(current_candle, history)
+        p5 = self._identify_p5_exhaustion(current_candle, history)
+        
+        if p4: return "P4_DETECTADO"
+        if p5: return "P5_DETECTADO"
+        
+        # Se não for padrão de entrada, verifica simetria básica
+        return self._check_s1_symmetry(history)
 
-        state = {
-            "symmetry": self._check_s1_symmetry(previous_candles),
-            "movement": self._check_m1_movement(latest_candle),
-            "magnetism_zone": "Consolidação" # Exemplo de estado a ser enviado para IA
-        }
-        return state
+    def _identify_p4_take_profit(self, current_candle: Dict, history: List[Dict]) -> bool:
+        """Regra P4: Família elefante + pavio contra o mercado"""
+        last_4_sizes = [abs(c['open'] - c['close']) for c in history[-4:]]
+        current_size = abs(current_candle['open'] - current_candle['close'])
+        is_elephant = all(current_size > s for s in last_4_sizes)
+        
+        has_correct_wick = False
+        if current_candle['close'] > current_candle['open']: # Alta
+            has_correct_wick = (current_candle['high'] - current_candle['close']) > 0
+        else: # Baixa
+            has_correct_wick = (current_candle['close'] - current_candle['low']) > 0
+            
+        return is_elephant and has_correct_wick
+
+    def _identify_p5_exhaustion(self, current_candle: Dict, history: List[Dict]) -> bool:
+        """Regra P5: Elefante + sequência de 2/3 velas da mesma cor"""
+        current_size = abs(current_candle['open'] - current_candle['close'])
+        prev_size = abs(history[-1]['open'] - history[-1]['close'])
+        
+        is_sequence = all(
+            (c['close'] > c['open']) == (current_candle['close'] > current_candle['open'])
+            for c in history[-2:]
+        )
+        return current_size > prev_size and is_sequence
 
     def _check_s1_symmetry(self, history: List[Dict]) -> str:
-        """
-        S1 (Rompimento): Simetria de corpo com corpo.
-        Compara o Fechamento de uma vela com a Abertura/Fechamento da anterior.
-        """
-        # Lógica simplificada: Verifica se os corpos das últimas 2 velas estão alinhados
+        """S1: Simetria de corpo com corpo"""
         c1, c2 = history[-2], history[-1]
-        
-        # Usa a sensibilidade para permitir micro-diferenças na taxa
         if abs(c1['close'] - c2['open']) <= self.sensitivity:
             return "S1_DETECTADA"
-        return "SEM_SIMETRIA"
-
-    def _check_m1_movement(self, candle: Dict) -> str:
-        """
-        M1 (Trator): Movimento contínuo que demonstra força, sem deixar pavio pro lado contrário.
-        """
-        body_size = abs(candle['open'] - candle['close'])
-        
-        # Exemplo: Vela de alta (Verde)
-        if candle['close'] > candle['open']:
-            lower_wick = candle['open'] - candle['low']
-            # Se não tem pavio embaixo (ou é menor que 3%), é um movimento Trator de alta
-            if lower_wick <= (body_size * 0.03): 
-                return "M1_TRATOR_ALTA"
-                
-        # Exemplo: Vela de baixa (Vermelha)
-        elif candle['close'] < candle['open']:
-            upper_wick = candle['high'] - candle['open']
-            if upper_wick <= (body_size * 0.03):
-                return "M1_TRATOR_BAIXA"
-                
-        return "MOVIMENTO_NORMAL"
+        return "SEM_PADRAO"
