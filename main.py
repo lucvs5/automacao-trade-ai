@@ -5,9 +5,18 @@ from core.streamer import MarketStreamer
 from core.engine import SymmetryEngine
 from core.decision_engine import DoubleSlitLogic
 from core.ai_agent import AI_Orchestrator
+from core.market_sim import OTCSimulator  # <-- O IMPORT ENTRA AQUI
 import uvicorn
 
 app = FastAPI()
+
+# 🟢 ESTADO GLOBAL E SIMULADOR ENTRAM AQUI:
+app_state = {
+    "data_source": "SIMULATOR",  # Pode ser "SIMULATOR" ou "REAL"
+    "active": False
+}
+
+simulator = OTCSimulator()
 
 # Liberando o acesso para o Frontend
 app.add_middleware(
