@@ -45,6 +45,11 @@ def stop_automation():
     automation_status["active"] = False
     return {"message": "Automação Interrompida", "status": automation_status}
 
+@app.get("/status")
+def get_status():
+    """Rota para o Dashboard ler a decisão atual"""
+    return automation_status
+
 async def run_trading_loop():
     """O Coração do Robô: Onde os componentes se conversam"""
     print("🚀 Loop de Trading Ativado!")
