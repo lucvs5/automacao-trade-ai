@@ -1,5 +1,6 @@
-import asyncio  # <-- CORREÇÃO 1: Adicionado para controlar o tempo do loop
+import asyncio
 from fastapi import FastAPI, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
 from core.streamer import MarketStreamer
 from core.engine import SymmetryEngine
 from core.decision_engine import DoubleSlitLogic
@@ -8,12 +9,21 @@ import uvicorn
 
 app = FastAPI()
 
+# Liberando o acesso para o Frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Inicialização dos Motores
 streamer = MarketStreamer()
 engine = SymmetryEngine(sensitivity=0.01)
 ai_bot = AI_Orchestrator()
 
-# Estado Global Simples (Para o Dashboard saber o que está acontecendo)
+# Estado Global Simples
 automation_status = {"active": False, "last_decision": "Aguardando início..."}
 
 @app.get("/")
