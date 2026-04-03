@@ -1,4 +1,3 @@
-// frontend/src/components/Dashboard.js
 import React, { useState, useEffect } from 'react';
 
 export default function Dashboard() {
@@ -6,27 +5,38 @@ export default function Dashboard() {
   const [isAuto, setIsAuto] = useState(false);
   const [systemLog, setSystemLog] = useState(["[SISTEMA] Aguardando início das operações..."]);
 
-  // Função para ligar o robô no Python
+  // Monitora o status em tempo real quando a automação está ligada
+  useEffect(() => {
+    let interval;
+    if (isAuto) {
+      interval = setInterval(async () => {
+        try {
+          const response = await fetch('http://localhost:8000/status');
+          const data = await response.json();
+          setSystemLog(prev => [...prev, `[IA] ${data.last_decision}`]);
+        } catch (error) {
+          console.error("Erro ao buscar status");
+        }
+      }, 1000); // Consulta a cada 1 segundo
+    }
+    return () => clearInterval(interval);
+  }, [isAuto]);
+
   const handleStart = async () => {
     try {
-      const response = await fetch('http://localhost:8000/start', { method: 'POST' });
-      const data = await response.json();
-      
+      await fetch('http://localhost:8000/start', { method: 'POST' });
       setIsAuto(true);
-      setSystemLog(prev => [...prev, `[SISTEMA] ${data.message}`]);
+      setSystemLog(prev => [...prev, "[SISTEMA] Automação Iniciada"]);
     } catch (error) {
-      setSystemLog(prev => [...prev, "[ERRO] Não foi possível conectar ao servidor backend."]);
+      setSystemLog(prev => [...prev, "[ERRO] Não foi possível conectar ao servidor."]);
     }
   };
 
-  // Função para desligar o robô no Python
   const handleStop = async () => {
     try {
-      const response = await fetch('http://localhost:8000/stop', { method: 'POST' });
-      const data = await response.json();
-      
+      await fetch('http://localhost:8000/stop', { method: 'POST' });
       setIsAuto(false);
-      setSystemLog(prev => [...prev, `[SISTEMA] ${data.message}`]);
+      setSystemLog(prev => [...prev, "[SISTEMA] Automação Interrompida"]);
     } catch (error) {
       setSystemLog(prev => [...prev, "[ERRO] Falha ao tentar parar a automação."]);
     }
@@ -43,16 +53,11 @@ export default function Dashboard() {
       </header>
 
       <main className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* Painel de Configurações */}
         <div className="bg-slate-800 p-6 rounded-xl border border-slate-700">
           <h2 className="text-lg font-semibold mb-4">Configuração da Espinha Dorsal</h2>
           
           <label className="block mb-2 text-sm text-slate-400">Nível de Raciocínio IA</label>
-          <select 
-            value={level} 
-            onChange={(e) => setLevel(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-600 p-2 rounded mb-6"
-          >
+          <select value={level} onChange={(e) => setLevel(e.target.value)} className="w-full bg-slate-900 border border-slate-600 p-2 rounded mb-6">
             <option value={0}>0% - Padrões Diretos</option>
             <option value={50}>50% - Validação de 3 Simetrias</option>
             <option value={100}>100% - Sintetização Completa (5 Simetrias)</option>
@@ -74,20 +79,12 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* Visualização de Logs da IA em Tempo Real */}
         <div className="md:col-span-2 bg-black/50 p-4 rounded-xl border border-slate-700 font-mono text-sm overflow-y-auto h-[400px]">
           {systemLog.map((log, index) => (
-            <p key={index} className={log.includes("[ERRO]") ? "text-red-400" : "text-cyan-500"}>
+            <p key={index} className={log.includes("[ERRO]") ? "text-red-400" : log.includes("[IA]") ? "text-yellow-400" : "text-cyan-500"}>
               {log}
             </p>
           ))}
-          {isAuto && (
-            <>
-              <p className="text-slate-400">[09:41:02] Buscando Simetrias S1/S2/S3...</p>
-              <p className="text-yellow-400">[09:41:05] IA IDENTIFICOU: Raciocínio Ascendente em 100% - Zona Magnética S2 Detectada.</p>
-              <p className="text-green-400">[09:41:06] ORDEM EXECUTADA: CALL - Confiança 92% - Mantra: Reversão Consciência.</p>
-            </>
-          )}
         </div>
       </main>
     </div>
