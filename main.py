@@ -35,63 +35,76 @@ ai_bot = AI_Orchestrator()
 # Estado Global Simples
 automation_status = {"active": False, "last_decision": "Aguardando início..."}
 
+# Continuação do seu main.py...
+
 @app.get("/")
 def read_root():
     return {"status": "Online", "system": "DEVMASTER PRO AI"}
 
-@app.post("/start")
-async def start_automation(background_tasks: BackgroundTasks):
-    """Rota que o botão 'INICIAR' do seu React vai chamar"""
-    if not automation_status["active"]:
-        automation_status["active"] = True
-        # Rodar o loop de mercado em background para não travar a API
-        background_tasks.add_task(run_trading_loop)
-    return {"message": "Automação Iniciada", "status": automation_status}
-
-@app.post("/stop")
-def stop_automation():
-    """Rota que o botão 'PARAR' vai chamar"""
-    automation_status["active"] = False
-    return {"message": "Automação Interrompida", "status": automation_status}
+@app.post("/set-source/{source}")
+def set_source(source: str):
+    """Muda a fonte: SIMULATOR ou REAL"""
+    if source in ["SIMULATOR", "REAL"]:
+        app_state["data_source"] = source
+        return {"status": "success", "source": source}
+    return {"status": "error", "message": "Fonte inválida"}
 
 @app.get("/status")
 def get_status():
-    """Rota para o Dashboard ler a decisão atual"""
-    return automation_status
+    """O site consulta isso a cada 1 segundo"""
+    return {
+        "active": app_state["active"],
+        "data_source": app_state["data_source"],
+        "last_decision": automation_status["last_decision"]
+    }
+
+@app.post("/start")
+async def start_automation(background_tasks: BackgroundTasks):
+    if not app_state["active"]:
+        app_state["active"] = True
+        background_tasks.add_task(run_trading_loop)
+    return {"message": "Automação Iniciada"}
+
+@app.post("/stop")
+def stop_automation():
+    app_state["active"] = False
+    return {"message": "Automação Interrompida"}
 
 async def run_trading_loop():
-    """O Coração do Robô: Onde os componentes se conversam"""
-    print("🚀 Loop de Trading Ativado!")
+    print(f"🚀 Loop Ativado usando: {app_state['data_source']}!")
     
-    while automation_status["active"]:
-        # 1. Captura dado (Simulação do Streamer)
-        raw_data = await streamer._receive_mock_tick()
-        
-        # 2. Engine analisa padrões
-        # <-- CORREÇÃO 2: Enviando 5 velas fictícias para o Engine não travar
-        mock_history = [
-            {"open": 100.0, "close": 100.5, "high": 101.0, "low": 99.0},
-            {"open": 100.5, "close": 101.0, "high": 101.5, "low": 100.0},
-            {"open": 101.0, "close": 100.8, "high": 101.2, "low": 100.5},
-            {"open": 100.8, "close": 99.5,  "high": 101.0, "low": 99.0},
-            {"open": 99.5,  "close": 100.0, "high": 100.5, "low": 99.2}
-        ]
-        
-        market_state = engine.analyze_market_state(mock_history)
-        
-        # Trava de segurança: só tenta tomar decisão se tiver as simetrias
-        if "status" in market_state:
-            decision = market_state["status"]
-        else:
-            # 3. DoubleSlitLogic toma a decisão técnica
-            logic = DoubleSlitLogic(patterns=market_state, symmetries=market_state['symmetry'], movements=market_state['movement'])
-            decision = logic.unified_reasoning(level_percent=100)
-        
-        # 4. Atualiza o status para o Frontend ler
-        automation_status["last_decision"] = decision
-        print(f"DEBUG: {decision}")
-        
-        await asyncio.sleep(2) # Espera 2 segundos para a próxima análise
+    while app_state["active"]:
+        try:
+            # 1. Busca os dados baseado na sua escolha
+            if app_state["data_source"] == "SIMULATOR":
+                # Gera uma vela simulada de 1 minuto
+                vela = simulator.generate_candle(60)
+                dados_para_analise = [vela] * 5 # Multiplicamos por 5 para o engine não travar por falta de dados
+            else:
+                # Aqui entrará a conexão real com a corretora depois
+                dados_para_analise = [{"open": 100, "close": 100, "high": 100, "low": 100}] * 5
+            
+            # 2. IA Analisa
+            market_state = engine.analyze_market_state(dados_para_analise)
+            
+            if "status" in market_state:
+                decision = market_state["status"]
+            else:
+                logic = DoubleSlitLogic(patterns=market_state, symmetries=market_state['symmetry'], movements=market_state['movement'])
+                decision = logic.unified_reasoning(level_percent=100)
+            
+            # 3. Atualiza o que vai para a tela
+            if app_state["data_source"] == "SIMULATOR":
+                automation_status["last_decision"] = f"[OTC] Preço: {vela['close']} | Decisão: {decision}"
+            else:
+                automation_status["last_decision"] = decision
+                
+            print(f"DEBUG: {automation_status['last_decision']}")
+            
+        except Exception as e:
+            print(f"Erro no loop: {e}")
+            
+        await asyncio.sleep(2) # Pausa de 2 segundos entre ciclos
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
