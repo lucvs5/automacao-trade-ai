@@ -1,4 +1,5 @@
 import asyncio
+import os  # <-- ADICIONE ESSE IMPORT AQUI
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse  # Import adicionado aqui!
@@ -35,7 +36,15 @@ automation_status = {"active": False, "last_decision": "Aguardando início..."}
 # ROTA ATUALIZADA: Agora ela abre o seu HTML visual
 @app.get("/")
 async def read_index():
-    return FileResponse("index.html")
+    # Isso descobre a pasta exata onde o seu main.py está rodando
+    diretorio_atual = os.path.dirname(os.path.abspath(__file__))
+    caminho_html = os.path.join(diretorio_atual, "index.html")
+    
+    # Verifica se o arquivo realmente existe antes de enviar
+    if not os.path.exists(caminho_html):
+        return {"erro": "Arquivo index.html não foi encontrado na mesma pasta do main.py!"}
+        
+    return FileResponse(caminho_html)
 
 @app.post("/set-source/{source}")
 def set_source(source: str):
